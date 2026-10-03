@@ -1,24 +1,25 @@
 # BASE_REGISTRY permite trocar a origem das imagens base sem editar o
-# Dockerfile. O default é o Docker Hub, para o build local continuar
-# funcionando; o build-and-push.sh sobrescreve com o ECR privado espelhado.
+# Dockerfile. O default é o Docker Hub (usado pela CI e pelo build local).
 ARG BASE_REGISTRY=docker.io/library
 
-# Stage 1: instala as dependências isoladamente. O compilador e o cache do pip
+# Stage 1: instala as dependências isoladamente. Compilador e cache do pip
 # ficam neste estágio e não entram na imagem final.
-FROM ${BASE_REGISTRY}/python:3.9-slim AS builder
+FROM ${BASE_REGISTRY}/python:3.13-slim AS builder
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 
 # Stage 2: runtime enxuto e sem root.
-ARG BASE_REGISTRY=docker.io/library
-FROM ${BASE_REGISTRY}/python:3.9-slim
+FROM ${BASE_REGISTRY}/python:3.13-slim
 RUN useradd --uid 1000 --create-home appuser
 WORKDIR /app
 COPY --from=builder --chown=1000:1000 /root/.local /home/appuser/.local
-COPY --chown=1000:1000 . .
+# Só o código da aplicação: testes, configs de CI e docs ficam de fora
+# (ver .dockerignore).
+COPY --chown=1000:1000 app.py .
 ENV PATH=/home/appuser/.local/bin:$PATH \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
 USER 1000
 EXPOSE 8002
-CMD ["gunicorn", "--bind", "0.0.0.0:8002", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8002", "--access-logfile", "-", "app:app"]

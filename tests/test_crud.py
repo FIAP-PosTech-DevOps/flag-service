@@ -88,7 +88,8 @@ def test_atualizar_flag(svc):
     )
     assert resp.status_code == 200
     query, values = svc.cursor.execute.call_args.args
-    assert "description = %s" in query and "is_enabled = %s" in query
+    assert "description = %s" in query
+    assert "is_enabled = %s" in query
     assert values == ("nova", False, "novo-checkout")
     svc.conn.commit.assert_called_once()
 
